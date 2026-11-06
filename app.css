@@ -286,6 +286,24 @@ input:focus, select:focus, textarea:focus {
   .answer-main { font-size: 24px; }
 }
 
+.card-prompt.long { font-size: 27px; line-height: 1.22; letter-spacing: -.02em; }
+.answer-main.long { font-size: 22px; line-height: 1.25; }
+@media (max-width: 420px) {
+  .card-prompt.long { font-size: 23px; }
+  .answer-main.long { font-size: 19px; }
+}
+
+.topic-picker { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.topic-opt {
+  padding: 7px 13px; cursor: pointer;
+  background: var(--surface); color: var(--fg-dim);
+  border: 2px solid var(--line); border-radius: 999px;
+  font: 700 13px/1.2 var(--font);
+  transition: all .14s;
+}
+.topic-opt:hover { border-color: var(--accent); color: var(--accent); }
+.topic-opt.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+
 /* ===================== choices ===================== */
 .choices { display: grid; gap: 10px; margin-bottom: 18px; }
 .choice {

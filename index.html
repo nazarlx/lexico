@@ -168,7 +168,8 @@
     <div class="tabs">
       <button class="tab active" data-addtab="one">Single word</button>
       <button class="tab" data-addtab="bulk">Import</button>
-      <button class="tab" data-addtab="seed">Starter pack</button>
+      <button class="tab" data-addtab="seed">Word pack</button>
+      <button class="tab" data-addtab="phrases">Phrases</button>
     </div>
 
     <form class="panel" id="addOneForm" data-addpane="one">
@@ -261,6 +262,21 @@
         Data: English Wiktionary (CC BY-SA 3.0) and the OpenSubtitles frequency
         list (hermitdave/FrequencyWords).
       </p>
+    </div>
+
+    <div class="panel hidden" data-addpane="phrases">
+      <h3>Everyday phrases — 160</h3>
+      <p class="hint">
+        Whole expressions people actually say, not isolated words:
+        <i>I'm on my way</i>, <i>Never mind</i>, <i>Could you give me a hand?</i>
+        Each card carries the phrase, its Ukrainian meaning and a sentence showing
+        when to use it. These are written by hand, not generated.
+      </p>
+      <label>Topics
+        <div class="topic-picker" id="topicPicker"></div>
+      </label>
+      <div id="phraseStatus" class="ai-status"></div>
+      <button class="btn primary wide" id="btnPhrasesLoad">Add selected phrases</button>
     </div>
   </section>
 

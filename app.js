@@ -437,7 +437,11 @@ const session = {
 function pickMode(w) {
   const r = w.srs.reps;
   if (r === 0) return 'flip';
+  // typing out a whole phrase is punishing and teaches little, so phrases
+  // (and any long term) never use the type mode
+  const typable = !isPhrase(w) && w.term.length <= 14 && !w.term.includes(' ');
   if (r < 3) return Math.random() < 0.5 ? 'flip' : 'choice';
+  if (!typable) return Math.random() < 0.5 ? 'flip' : 'choice';
   return Math.random() < 0.6 ? 'type' : 'choice';
 }
 
@@ -691,6 +695,7 @@ function renderCard() {
   if (session.mode === 'type') {
     // Ukrainian → English: prompt is the translation, answer is typed.
     $('#cardPrompt').textContent = w.translation;
+    $('#cardPrompt').classList.toggle('long', w.translation.length > 18);
     $('#cardIpa').textContent = '';
     $('#btnSpeak').classList.add('hidden');
     const input = $('#typeInput');
@@ -702,6 +707,7 @@ function renderCard() {
   } else {
     $('#cardPrompt').textContent = w.term;
     $('#cardIpa').textContent = w.ipa || '';
+    $('#cardPrompt').classList.toggle('long', w.term.length > 18);
     $('#btnSpeak').classList.remove('hidden');
     if (settings.sound && settings.autoSpeak) speak(w.term);
 
@@ -715,7 +721,10 @@ function renderCard() {
 }
 
 function renderChoices(w) {
-  const pool = session.allWords.filter((x) => x.id !== w.id && x.translation);
+  const all = session.allWords.filter((x) => x.id !== w.id && x.translation);
+  // compare like with like: phrase options next to a phrase, words next to a word
+  const sameKind = all.filter((x) => isPhrase(x) === isPhrase(w));
+  const pool = sameKind.length >= 3 ? sameKind : all;
   const distractors = shuffle(pool).slice(0, 3).map((x) => x.translation);
   const options = shuffle([w.translation, ...distractors]);
   $('#choices').innerHTML = options
@@ -729,6 +738,7 @@ function renderChoices(w) {
 function revealAnswer() {
   const w = session.current;
   $('#answerMain').textContent = session.mode === 'type' ? w.term : w.translation;
+  $('#answerMain').classList.toggle('long', $('#answerMain').textContent.length > 26);
   // the back face repeats the prompt word, so the pair stays readable after the flip
   $('#answerTerm').textContent = session.mode === 'type' ? w.translation : w.term;
   let ex = '';
@@ -1093,6 +1103,79 @@ async function loadSeedPack() {
   }
 }
 
+/* ======================= phrase pack ======================= */
+
+let phraseCache = null;
+const selectedTopics = new Set();
+
+const isPhrase = (w) => w.pos === 'phrase';
+
+async function fetchPhrases() {
+  if (phraseCache) return phraseCache;
+  const res = await fetch('phrases.json');
+  if (!res.ok) throw new Error('phrases.json was not found next to the app.');
+  phraseCache = await res.json();
+  return phraseCache;
+}
+
+async function renderTopicPicker() {
+  const box = $('#topicPicker');
+  if (!box || box.dataset.ready) return;
+  try {
+    const all = await fetchPhrases();
+    const byTopic = new Map();
+    all.forEach((p) => {
+      const label = (p.tags && p.tags[0]) || p.topic;
+      if (!byTopic.has(p.topic)) byTopic.set(p.topic, { label, n: 0 });
+      byTopic.get(p.topic).n += 1;
+    });
+    box.innerHTML =
+      `<button type="button" class="topic-opt all on" data-topic="*">All ${all.length}</button>` +
+      [...byTopic].map(([topic, d]) =>
+        `<button type="button" class="topic-opt" data-topic="${escapeHtml(topic)}">${escapeHtml(d.label)} ${d.n}</button>`).join('');
+    box.dataset.ready = '1';
+  } catch (e) {
+    box.innerHTML = `<span class="ai-status err">${escapeHtml(e.message)}</span>`;
+  }
+}
+
+async function loadPhrasePack() {
+  const btn = $('#btnPhrasesLoad');
+  const status = $('#phraseStatus');
+  status.classList.remove('err');
+  btn.disabled = true;
+  try {
+    const all = await fetchPhrases();
+    const picked = selectedTopics.size
+      ? all.filter((p) => selectedTopics.has(p.topic))
+      : all;
+    if (!picked.length) throw new Error('Pick at least one topic.');
+
+    status.textContent = 'Checking for duplicates…';
+    const existing = new Set((await store.allWords()).map((w) => w.termKey));
+    const fresh = [];
+    let skipped = 0;
+    picked.forEach((p, i) => {
+      const key = normalize(p.term);
+      if (existing.has(key)) { skipped++; return; }
+      existing.add(key);
+      // phrases go ahead of the frequency pack but behind hand-added words
+      fresh.push(makeWord({ ...p, order: i + 1 }));
+    });
+
+    await putWords(fresh);
+    status.textContent = '';
+    toast(`Added ${fresh.length} ${plural(fresh.length, 'phrase', 'phrases')}` +
+          (skipped ? `, ${skipped} already there` : ''));
+    await refreshDueBadge();
+  } catch (e) {
+    status.classList.add('err');
+    status.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 /* ======================= export / import ======================= */
 
 async function exportJson() {
@@ -1263,6 +1346,7 @@ function wire() {
   $$('[data-addtab]').forEach((t) => t.addEventListener('click', () => {
     $$('[data-addtab]').forEach((x) => x.classList.toggle('active', x === t));
     $$('[data-addpane]').forEach((p) => p.classList.toggle('hidden', p.dataset.addpane !== t.dataset.addtab));
+    if (t.dataset.addtab === 'phrases') renderTopicPicker();
   }));
 
   // add — AI autofill
@@ -1349,6 +1433,27 @@ function wire() {
 
   // add — starter pack
   $('#btnSeedLoad').addEventListener('click', loadSeedPack);
+
+  // add — phrase pack
+  $('#btnPhrasesLoad').addEventListener('click', loadPhrasePack);
+  $('#topicPicker').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-topic]');
+    if (!b) return;
+    const all = $('#topicPicker').querySelector('.topic-opt.all');
+    if (b.dataset.topic === '*') {
+      selectedTopics.clear();
+      $$('#topicPicker .topic-opt').forEach((x) => x.classList.toggle('on', x === all));
+    } else {
+      b.classList.toggle('on');
+      selectedTopics.clear();
+      $$('#topicPicker .topic-opt.on').forEach((x) => {
+        if (x.dataset.topic !== '*') selectedTopics.add(x.dataset.topic);
+      });
+      all.classList.toggle('on', selectedTopics.size === 0);
+    }
+    const n = selectedTopics.size;
+    $('#btnPhrasesLoad').textContent = n ? `Add ${n} selected ${plural(n, 'topic', 'topics')}` : 'Add all phrases';
+  });
 
   // settings
   $('#btnSaveSettings').addEventListener('click', async () => {
