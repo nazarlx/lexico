@@ -1,6 +1,6 @@
 /* Offline shell cache. Bump CACHE on every release so clients pick up new assets. */
 
-const CACHE = 'lexico-v9';
+const CACHE = 'lexico-v10';
 const ASSETS = [
   './',
   './index.html',

@@ -75,16 +75,28 @@ const DEFAULTS = {
   lang: 'ukrainian',
   sessionMax: 90,    // cap on DUE REVIEWS per session; new words are always the full goal
   newPerDay: 30,     // daily goal, Monday–Saturday; Sunday is the recap
-  sound: false,      // master switch; off by default — system voices vary wildly in quality
+  sound: true,       // master switch for all audio
   autoSpeak: true,   // only applies while `sound` is on
-  voiceURI: '',
+  voiceURI: '',      // empty = pick the best voice automatically
+  voiceSetup: 0,     // bumped when the voice feature changes, to re-enable sound once
 };
+
+const VOICE_SETUP = 1;
 
 let settings = { ...DEFAULTS };
 
 async function loadSettings() {
   const saved = await store.getMeta('settings', {});
   settings = { ...DEFAULTS, ...saved };
+
+  // Sound used to be off by default because the browser picked poor voices.
+  // Now that a good voice is chosen deliberately, switch it back on once.
+  if ((settings.voiceSetup || 0) < VOICE_SETUP) {
+    settings.sound = true;
+    settings.voiceURI = '';
+    settings.voiceSetup = VOICE_SETUP;
+    await saveSettings();
+  }
 }
 
 function saveSettings() {
@@ -109,7 +121,7 @@ function freshSrs() {
   return { reps: 0, lapses: 0, interval: 0, ease: EASE_START, due: today(), lastGrade: null };
 }
 
-/* Binary grading: 0 = "не знаю", 1 = "знаю".
+/* Binary grading: 0 = "don't know", 1 = "know".
    With only two answers there is no self-rated difficulty, so the interval
    growth comes from the success streak and a slowly adapting ease factor.
    Returns a new srs object; never mutates the input. */
@@ -140,13 +152,13 @@ function schedule(srs, grade) {
 
 /* What the next interval would be, for the button hint. */
 function previewInterval(srs, grade) {
-  if (grade === 0) return 'покажу знову';
+  if (grade === 0) return 'shown again';
   const n = schedule(srs, grade).interval;
-  if (n <= 1) return 'через 1 день';
-  if (n < 5) return 'через ' + n + ' дні';
-  if (n < 30) return 'через ' + n + ' днів';
-  if (n < 365) return 'через ' + Math.round(n / 30) + ' міс';
-  return 'через рік';
+  if (n <= 1) return 'in 1 day';
+  if (n < 5) return 'in ' + n + ' days';
+  if (n < 30) return 'in ' + n + ' days';
+  if (n < 365) return 'in ' + Math.round(n / 30) + ' months';
+  return 'in a year';
 }
 
 /* ======================= week model ======================= */
@@ -155,8 +167,8 @@ function previewInterval(srs, grade) {
 const RECAP_DAY = 0;                       // JS Sunday
 const isRecapDay = (d = new Date()) => d.getDay() === RECAP_DAY;
 
-const DAY_NAMES = ['Неділя', 'Понеділок', 'Вівторок', 'Середа', 'Четвер', "П'ятниця", 'Субота'];
-const DAY_SHORT = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /* Monday 00:00 of the current week. Sunday belongs to the week that just ended. */
 function weekStart(ts = Date.now()) {
@@ -210,24 +222,93 @@ function shuffle(a) {
 
 function dueLabel(ts) {
   const diff = Math.round((ts - today()) / DAY);
-  if (diff <= 0) return 'сьогодні';
-  if (diff === 1) return 'завтра';
-  if (diff < 30) return 'через ' + diff + ' дн';
-  return 'через ' + Math.round(diff / 30) + ' міс';
+  if (diff <= 0) return 'today';
+  if (diff === 1) return 'tomorrow';
+  if (diff < 30) return 'in ' + diff + ' days';
+  return 'in ' + Math.round(diff / 30) + ' months';
 }
 
 /* ======================= speech ======================= */
 
 let voices = [];
 
+/* Known-good female English voices, best first. The browser's own default is
+   often a robotic fallback, which is why the voice must be chosen explicitly. */
+const FEMALE_VOICES = [
+  // Apple — premium / enhanced variants sound the most natural
+  'ava (premium)', 'ava (enhanced)', 'samantha (enhanced)', 'allison (enhanced)',
+  'susan (enhanced)', 'zoe (premium)', 'zoe (enhanced)', 'nicky', 'ava',
+  'samantha', 'allison', 'susan', 'joelle', 'noelle', 'zoe',
+  'karen', 'moira', 'tessa', 'fiona', 'serena', 'kate', 'stephanie',
+  // Google (Chrome, Android)
+  'google us english', 'google uk english female', 'google english',
+  // Microsoft (Edge, Windows) — the "Online (Natural)" ones are the good ones
+  'microsoft aria online (natural)', 'microsoft jenny online (natural)',
+  'microsoft michelle online (natural)', 'microsoft sonia online (natural)',
+  'microsoft emma online (natural)', 'aria', 'jenny', 'michelle', 'sonia',
+  'emma', 'zira', 'hazel', 'eva',
+];
+
+/* Novelty and low-quality voices macOS ships; never auto-select these. */
+const BAD_VOICE = /bad news|good news|bubbles|bells|boing|jester|organ|cellos|trinoids|whisper|wobble|zarvox|albert|bahh|deranged|hysterical|superstar|junior|ralph|fred|grandma|grandpa|rocko|shelley|sandy|flo|eddy|reed|rishi/i;
+
+/* Higher is better; 0 or less means "do not auto-select". */
+function voiceScore(v) {
+  const name = v.name.toLowerCase();
+  if (BAD_VOICE.test(name)) return -1;
+
+  const idx = FEMALE_VOICES.findIndex((n) => name === n || name.startsWith(n));
+  if (idx === -1) return -1;                     // only auto-pick voices we vouch for
+
+  let score = 1000 - idx * 10;
+  if (/premium|enhanced|natural/.test(name)) score += 120;
+  if (v.lang === 'en-US') score += 40;
+  else if (v.lang === 'en-GB') score += 25;
+  else if (v.lang.startsWith('en')) score += 10;
+  return score;
+}
+
+/* Best voice this device offers, or null when it has nothing decent. */
+function bestVoice() {
+  const ranked = voices
+    .map((v) => ({ v, s: voiceScore(v) }))
+    .filter((x) => x.s > 0)
+    .sort((a, b) => b.s - a.s);
+  return ranked.length ? ranked[0].v : null;
+}
+
+function currentVoice() {
+  if (settings.voiceURI) {
+    const chosen = voices.find((x) => x.voiceURI === settings.voiceURI);
+    if (chosen) return chosen;
+  }
+  return bestVoice();
+}
+
 function loadVoices() {
   if (!('speechSynthesis' in window)) return;
   voices = speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en'));
+
   const sel = $('#sVoice');
   if (!sel) return;
-  sel.innerHTML = '<option value="">Системний за замовчуванням</option>' +
-    voices.map((v) => `<option value="${escapeHtml(v.voiceURI)}">${escapeHtml(v.name)} (${v.lang})</option>`).join('');
+
+  const best = bestVoice();
+  const good = voices.filter((v) => voiceScore(v) > 0).sort((a, b) => voiceScore(b) - voiceScore(a));
+  const rest = voices.filter((v) => voiceScore(v) <= 0 && !BAD_VOICE.test(v.name.toLowerCase()));
+  const opt = (v) => `<option value="${escapeHtml(v.voiceURI)}">${escapeHtml(v.name)} (${v.lang})</option>`;
+
+  sel.innerHTML =
+    `<option value="">Automatic${best ? ' — ' + escapeHtml(best.name) : ''}</option>` +
+    (good.length ? '<optgroup label="Recommended">' + good.map(opt).join('') + '</optgroup>' : '') +
+    (rest.length ? '<optgroup label="Other">' + rest.map(opt).join('') + '</optgroup>' : '');
   sel.value = settings.voiceURI || '';
+
+  const note = $('#voiceNote');
+  if (note) {
+    note.textContent = best ? '' :
+      'No high-quality English voice found here. On iPhone add one under ' +
+      'Settings → Accessibility → Spoken Content → Voices.';
+  }
 }
 
 /* Single choke point for all audio: nothing speaks while `sound` is off. */
@@ -235,10 +316,11 @@ function speak(text) {
   if (!settings.sound || !('speechSynthesis' in window) || !text) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US';
-  u.rate = 0.92;
-  const v = voices.find((x) => x.voiceURI === settings.voiceURI);
-  if (v) u.voice = v;
+  const v = currentVoice();
+  if (v) { u.voice = v; u.lang = v.lang; }
+  else u.lang = 'en-US';
+  u.rate = 0.9;      // slightly slower reads clearer for a learner
+  u.pitch = 1.05;    // a touch brighter so the voice doesn't sound flat
   speechSynthesis.speak(u);
 }
 
@@ -268,7 +350,7 @@ const BATCH_SCHEMA = {
 };
 
 async function callClaude(userText, schema) {
-  if (!settings.apiKey) throw new Error('Спочатку додай API-ключ у Налаштуваннях.');
+  if (!settings.apiKey) throw new Error('Add an API key in Settings first.');
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -297,17 +379,17 @@ async function callClaude(userText, schema) {
       const err = await res.json();
       detail = err?.error?.message || '';
     } catch { /* non-JSON error body */ }
-    if (res.status === 401) throw new Error('Невірний API-ключ.');
-    if (res.status === 429) throw new Error('Перевищено ліміт запитів. Спробуй за хвилину.');
-    throw new Error(`Помилка API (${res.status}). ${detail}`.trim());
+    if (res.status === 401) throw new Error('Invalid API key.');
+    if (res.status === 429) throw new Error('Rate limit reached. Try again in a minute.');
+    throw new Error(`API error (${res.status}). ${detail}`.trim());
   }
 
   const data = await res.json();
-  if (data.stop_reason === 'refusal') throw new Error('Модель відмовилася обробити цей запит.');
-  if (data.stop_reason === 'max_tokens') throw new Error('Відповідь обрізано — спробуй меншу порцію слів.');
+  if (data.stop_reason === 'refusal') throw new Error('The model declined this request.');
+  if (data.stop_reason === 'max_tokens') throw new Error('Response was cut off — try a smaller batch.');
 
   const text = (data.content || []).find((b) => b.type === 'text')?.text;
-  if (!text) throw new Error('Порожня відповідь від моделі.');
+  if (!text) throw new Error('Empty response from the model.');
   return JSON.parse(text);
 }
 
@@ -349,7 +431,7 @@ const session = {
   revealed: false,
   allWords: [],     // snapshot for building distractors
   isRecap: false,   // Sunday week check-up
-  forgot: [],       // words answered "не знаю" this session
+  forgot: [],       // words answered "don't know" this session
 };
 
 function pickMode(w) {
@@ -359,7 +441,7 @@ function pickMode(w) {
   return Math.random() < 0.6 ? 'type' : 'choice';
 }
 
-const MODE_LABEL = { flip: 'Картка', choice: 'Вибір варіанта', type: 'Введення слова' };
+const MODE_LABEL = { flip: 'Flashcard', choice: 'Multiple choice', type: 'Type it out' };
 
 /* Everything the Today screen needs to describe the day. */
 async function todayPlan() {
@@ -442,34 +524,34 @@ async function beginSession() {
 async function renderPlan(plan) {
   const d = new Date();
   $('#planDay').textContent =
-    `${DAY_NAMES[d.getDay()]}, ${d.getDate()} ${['січня','лютого','березня','квітня','травня','червня','липня','серпня','вересня','жовтня','листопада','грудня'][d.getMonth()]}`;
+    `${DAY_NAMES[d.getDay()]}, ${['January','February','March','April','May','June','July','August','September','October','November','December'][d.getMonth()]} ${d.getDate()}`;
 
   const rows = [];
   let doneUnits = 0, totalUnits = 0;
 
   if (plan.recap) {
-    $('#planTitle').textContent = 'Підсумок тижня';
-    rows.push(['📖', 'Слів вивчено за тиждень', plan.weekCount]);
-    rows.push(['🔁', 'Перевіримо всі', plan.weekCount]);
+    $('#planTitle').textContent = 'Weekly review';
+    rows.push(['📖', 'Learned this week', plan.weekCount]);
+    rows.push(['🔁', 'We will check them all', plan.weekCount]);
     totalUnits = plan.weekCount;
     doneUnits = 0;
     $('#planNote').textContent = plan.weekCount
-      ? 'Сьогодні нових слів немає. Перевіряємо, що залишилось у памʼяті з понеділка по суботу.'
-      : 'Цього тижня нових слів ще не було. Повертайся в понеділок або повтори наперед.';
-    $('#btnStartToday').textContent = 'Перевірити тиждень';
+      ? 'No new words today. Time to check what stuck from Monday to Saturday.'
+      : 'No new words this week yet. Come back on Monday or study ahead.';
+    $('#btnStartToday').textContent = 'Review the week';
     $('#btnStartToday').disabled = plan.weekCount === 0;
   } else {
-    $('#planTitle').textContent = 'План на сьогодні';
-    rows.push(['✨', 'Нові слова', `${plan.introducedToday} / ${plan.goal}`]);
-    rows.push(['🔁', 'Повторення', plan.dueCount]);
+    $('#planTitle').textContent = "Today's plan";
+    rows.push(['✨', 'New words', `${plan.introducedToday} / ${plan.goal}`]);
+    rows.push(['🔁', 'Reviews due', plan.dueCount]);
     totalUnits = plan.goal + plan.dueCount + plan.introducedToday;
     doneUnits = plan.introducedToday;
     const dueNow = Math.min(plan.dueCount, settings.sessionMax);
     const left = plan.newPlanned + dueNow;
     $('#planNote').textContent = left
-      ? `Карток у сесії: ${left} — ${plan.newPlanned} нових і ${dueNow} на повторення.`
-      : 'Денну норму виконано. Можна повторити наперед або просто відпочити.';
-    $('#btnStartToday').textContent = left ? 'Почати' : 'Повторити наперед';
+      ? `${left} cards in this session — ${plan.newPlanned} new and ${dueNow} to review.`
+      : "Today's goal is done. Study ahead, or call it a day.";
+    $('#btnStartToday').textContent = left ? 'Start' : 'Study ahead';
     $('#btnStartToday').disabled = false;
   }
 
@@ -520,8 +602,8 @@ async function renderWeekStrip(plan) {
   const learned = plan.weekCount;
   const mature = plan.week.filter((w) => w.srs.reps >= 2 && w.srs.lastGrade === 1).length;
   $('#weekSummary').textContent = learned
-    ? `Вивчено цього тижня: ${learned} ${plural(learned, 'слово', 'слова', 'слів')}, упевнено памʼятаєш ${mature}.`
-    : 'Цього тижня нових слів ще не було.';
+    ? `Learned this week: ${learned} ${plural(learned, 'word', 'words')}, ${mature} already solid.`
+    : 'No new words learned this week yet.';
   $('#weekCard').classList.toggle('hidden', false);
 }
 
@@ -530,18 +612,18 @@ async function renderWeekStrip(plan) {
 function renderEmptyState(total) {
   const firstRun = total === 0;
   $('#emptyIcon').textContent = firstRun ? '📚' : '✅';
-  $('#emptyTitle').textContent = firstRun ? 'Починаємо' : 'На сьогодні все';
+  $('#emptyTitle').textContent = firstRun ? 'Getting started' : 'All done for today';
   $('#emptyHint').textContent = firstRun
-    ? 'У словнику поки порожньо. Візьми готовий набір найчастотніших слів або додай свої.'
-    : 'Повторень немає. Додай нові слова або повертайся завтра.';
+    ? 'Your dictionary is empty. Take the starter pack of the most frequent words, or add your own.'
+    : 'Nothing is due. Add new words or come back tomorrow.';
   $('#btnQuickSeed').classList.toggle('hidden', !firstRun);
   $('#btnEmptyAdd').classList.toggle('hidden', false);
-  $('#btnEmptyAdd').textContent = firstRun ? 'Додати свої слова' : 'Додати слова';
+  $('#btnEmptyAdd').textContent = firstRun ? 'Add your own words' : 'Add words';
   $('#btnEmptyAdd').classList.toggle('primary', !firstRun);
   $('#btnEmptyAdd').classList.toggle('ghost', firstRun);
   $('#btnStudyAhead').classList.toggle('hidden', firstRun);
   $('#quickSeedNote').textContent = firstRun
-    ? 'Слова додаються за частотністю, а в день показується лише стільки нових, скільки ти задав у налаштуваннях.'
+    ? 'Words are introduced by frequency, and only as many new ones per day as your goal allows.'
     : '';
 }
 
@@ -549,7 +631,7 @@ function renderEmptyState(total) {
 async function quickSeed() {
   const btn = $('#btnQuickSeed');
   btn.disabled = true;
-  btn.textContent = 'Завантаження…';
+  btn.textContent = 'Loading…';
   try {
     $('#seedCount').value = '1000';
     $('#seedLevel').value = 'all';
@@ -558,7 +640,7 @@ async function quickSeed() {
     await beginSession();
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Завантажити 1000 слів';
+    btn.textContent = 'Load 1000 words';
   }
 }
 
@@ -604,7 +686,7 @@ function renderCard() {
 
   // the card itself is only clickable in flip mode
   $('#flashcard').style.cursor = session.mode === 'flip' ? 'pointer' : 'default';
-  $('#flipHint').textContent = session.mode === 'flip' ? 'Натисни, щоб побачити переклад' : '';
+  $('#flipHint').textContent = session.mode === 'flip' ? 'Tap to see the translation' : '';
 
   if (session.mode === 'type') {
     // Ukrainian → English: prompt is the translation, answer is typed.
@@ -712,8 +794,8 @@ async function finishSession() {
   const recap = session.isRecap;
 
   $('#doneIcon').textContent = recap ? '🏁' : '🎉';
-  $('#doneTitle').textContent = recap ? 'Підсумок тижня' : 'Сесію завершено';
-  $('#doneTotalLbl').textContent = recap ? 'слів за тиждень' : 'карток';
+  $('#doneTitle').textContent = recap ? 'Weekly review' : 'Session complete';
+  $('#doneTotalLbl').textContent = recap ? 'words this week' : 'cards';
   $('#doneTotal').textContent = session.total;
   $('#doneAcc').textContent = pct + '%';
   $('#doneStreak').textContent = streak.count;
@@ -729,23 +811,20 @@ async function finishSession() {
 
   if (recap) {
     $('#doneStats').textContent = forgot.length
-      ? `${session.correct} з ${session.total} памʼятаєш упевнено. Решту повторимо найближчими днями.`
-      : 'Весь тиждень засвоєно повністю. Новий цикл — у понеділок.';
+      ? `You recalled ${session.correct} of ${session.total}. The rest come back over the next few days.`
+      : 'The whole week is solid. A new cycle starts on Monday.';
   } else {
     $('#doneStats').textContent = nextDue
-      ? `Наступне повторення — ${dueLabel(nextDue)}.`
-      : 'Додай нові слова, щоб продовжити.';
+      ? `Next review ${dueLabel(nextDue)}.`
+      : 'Add new words to keep going.';
   }
 
   await refreshDueBadge();
   show('done');
 }
 
-function plural(n, one, few, many) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
+function plural(n, one, many) {
+  return n === 1 ? one : many;
 }
 
 /* ======================= streak ======================= */
@@ -798,20 +877,20 @@ async function renderWords() {
 
   const container = $('#wordList');
   $('#wordCount').textContent = list.length
-    ? `${list.length} ${plural(list.length, 'слово', 'слова', 'слів')}`
+    ? `${list.length} ${plural(list.length, 'word', 'words')}`
     : '';
 
   if (!list.length) {
     container.innerHTML = all.length
-      ? `<div class="empty"><div class="empty-icon">🔍</div><h2>Нічого не знайдено</h2>
-           <p>Спробуй інший запит або зміни фільтр.</p></div>`
-      : `<div class="empty"><div class="empty-icon">📚</div><h2>Словник порожній</h2>
-           <p>Додай слова вручну або візьми готовий набір.</p>
-           <div class="empty-actions"><button class="btn primary" data-nav="add">Додати слова</button></div></div>`;
+      ? `<div class="empty"><div class="empty-icon">🔍</div><h2>Nothing found</h2>
+           <p>Try another search or change the filter.</p></div>`
+      : `<div class="empty"><div class="empty-icon">📚</div><h2>No words yet</h2>
+           <p>Add words by hand or grab the starter pack.</p>
+           <div class="empty-actions"><button class="btn primary" data-nav="add">Add words</button></div></div>`;
     return;
   }
 
-  const stateLabel = { new: 'нове', learning: 'вчиться', mature: 'вивчене' };
+  const stateLabel = { new: 'new', learning: 'learning', mature: 'known' };
   container.innerHTML = list.map((w) => {
     const st = wordState(w);
     return `<div class="word" data-id="${w.id}">
@@ -822,8 +901,8 @@ async function renderWords() {
           <div class="word-state state-${st}">${stateLabel[st]}</div>
           <div class="word-due">${dueLabel(w.srs.due)}</div>
         </div>
-        <button class="icon-btn" data-speak="${escapeHtml(w.term)}" title="Озвучити">🔊</button>
-        <button class="icon-btn" data-del="${w.id}" title="Видалити">✕</button>
+        <button class="icon-btn" data-speak="${escapeHtml(w.term)}" title="Play pronunciation">🔊</button>
+        <button class="icon-btn" data-del="${w.id}" title="Delete">✕</button>
       </div>
     </div>`;
   }).join('');
@@ -857,10 +936,10 @@ async function renderStats() {
     else if (d < 14) buckets[d]++;
   });
   const peak = Math.max(1, ...buckets);
-  const names = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+  const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   $('#forecast').innerHTML = buckets.map((n, i) => {
     const d = new Date(t + i * DAY);
-    const label = i === 0 ? 'сьог' : names[d.getDay()];
+    const label = i === 0 ? 'now' : names[d.getDay()];
     return `<div class="fc-col" data-count="${n}" title="${n}">
       <div class="fc-bar" style="height:${Math.round((n / peak) * 100)}%"></div>
       <div class="fc-lbl">${label}</div>
@@ -969,9 +1048,9 @@ async function loadSeedPack() {
 
   try {
     if (!seedCache) {
-      status.textContent = 'Завантаження набору…';
+      status.textContent = 'Downloading the pack…';
       const res = await fetch('seed.json');
-      if (!res.ok) throw new Error('Файл seed.json не знайдено поруч з додатком.');
+      if (!res.ok) throw new Error('seed.json was not found next to the app.');
       seedCache = await res.json();
     }
 
@@ -983,7 +1062,7 @@ async function loadSeedPack() {
     let picked = allowed ? seedCache.filter((d) => allowed.has(d.level)) : seedCache.slice();
     picked = picked.slice(0, limit);
 
-    status.textContent = 'Перевірка дублікатів…';
+    status.textContent = 'Checking for duplicates…';
     const existing = new Set((await store.allWords()).map((w) => w.termKey));
 
     const fresh = [];
@@ -999,12 +1078,12 @@ async function loadSeedPack() {
     // Write in chunks so a huge pack does not block the UI in one transaction.
     const CHUNK = 500;
     for (let i = 0; i < fresh.length; i += CHUNK) {
-      status.textContent = `Збереження ${Math.min(i + CHUNK, fresh.length)} / ${fresh.length}…`;
+      status.textContent = `Saving ${Math.min(i + CHUNK, fresh.length)} / ${fresh.length}…`;
       await putWords(fresh.slice(i, i + CHUNK));
     }
 
     status.textContent = '';
-    toast(`Додано ${fresh.length}${skipped ? `, вже були: ${skipped}` : ''}`);
+    toast(`Added ${fresh.length}${skipped ? `, ${skipped} already there` : ''}`);
     await refreshDueBadge();
   } catch (e) {
     status.classList.add('err');
@@ -1029,13 +1108,13 @@ async function exportJson() {
   a.download = `lexio-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
-  toast(`Експортовано ${words.length} ${plural(words.length, 'слово', 'слова', 'слів')}`);
+  toast(`Exported ${words.length} ${plural(words.length, 'word', 'words')}`);
 }
 
 async function importJson(file) {
   try {
     const data = JSON.parse(await file.text());
-    if (!Array.isArray(data.words)) throw new Error('Невідомий формат файлу.');
+    if (!Array.isArray(data.words)) throw new Error('Unrecognised file format.');
     let added = 0;
     for (const w of data.words) {
       if (!w.term) continue;
@@ -1047,10 +1126,10 @@ async function importJson(file) {
       });
       added++;
     }
-    toast(`Імпортовано ${added} ${plural(added, 'слово', 'слова', 'слів')}`);
+    toast(`Imported ${added} ${plural(added, 'word', 'words')}`);
     await refreshDueBadge();
   } catch (e) {
-    toast(e.message || 'Не вдалося прочитати файл', true);
+    toast(e.message || 'Could not read the file', true);
   }
 }
 
@@ -1113,12 +1192,12 @@ function wire() {
     settings.newPerDay = Number(b.dataset.goal);
     await saveSettings();
     await renderPlan(await todayPlan());
-    toast(`Норма: ${settings.newPerDay} ${plural(settings.newPerDay, 'слово', 'слова', 'слів')} на день`);
+    toast(`Goal: ${settings.newPerDay} ${plural(settings.newPerDay, 'word', 'words')} per day`);
   });
   $('#btnDoneMore').addEventListener('click', () => $('#btnStudyAhead').click());
   $('#btnStudyAhead').addEventListener('click', async () => {
     const q = await buildQueue({ ahead: true });
-    if (!q.length) return toast('Немає що повторювати наперед');
+    if (!q.length) return toast('Nothing to study ahead');
     session.queue = q; session.total = q.length;
     session.answered = 0; session.correct = 0;
     session.forgot = []; session.isRecap = false;
@@ -1173,7 +1252,7 @@ function wire() {
     const sp = e.target.closest('[data-speak]');
     if (sp) return speak(sp.dataset.speak);
     const del = e.target.closest('[data-del]');
-    if (del && confirm('Видалити це слово?')) {
+    if (del && confirm('Delete this word?')) {
       await store.delWord(del.dataset.del);
       await renderWords();
       await refreshDueBadge();
@@ -1189,14 +1268,14 @@ function wire() {
   // add — AI autofill
   $('#btnAutofill').addEventListener('click', async () => {
     const term = $('#fTerm').value.trim();
-    if (!term) return toast('Спочатку введи слово', true);
+    if (!term) return toast('Type a word first', true);
     const status = $('#aiStatus');
     status.classList.remove('err');
-    status.textContent = 'Claude заповнює картку…';
+    status.textContent = 'Claude is filling the card…';
     $('#btnAutofill').disabled = true;
     try {
       fillAddForm(await enrichOne(term));
-      status.textContent = 'Готово — перевір і збережи.';
+      status.textContent = 'Done — review it and save.';
     } catch (err) {
       status.classList.add('err');
       status.textContent = err.message;
@@ -1210,7 +1289,7 @@ function wire() {
     e.preventDefault();
     const fields = readAddForm();
     const result = await upsertWord(fields);
-    toast(result === 'merged' ? 'Слово вже було — доповнено' : 'Слово додано');
+    toast(result === 'merged' ? 'Word already existed — details filled in' : 'Word added');
     clearAddForm();
     $('#fTerm').focus();
     await refreshDueBadge();
@@ -1219,7 +1298,7 @@ function wire() {
   // add — bulk
   $('#btnBulkImport').addEventListener('click', async () => {
     const pairs = parseBulk($('#bulkInput').value);
-    if (!pairs.length) return toast('Нічого не розпізнано', true);
+    if (!pairs.length) return toast('Nothing recognised', true);
 
     const status = $('#bulkStatus');
     status.classList.remove('err');
@@ -1233,7 +1312,7 @@ function wire() {
         const enriched = [];
         for (let i = 0; i < pairs.length; i += CHUNK) {
           const slice = pairs.slice(i, i + CHUNK);
-          status.textContent = `Claude обробляє ${i + 1}–${Math.min(i + CHUNK, pairs.length)} з ${pairs.length}…`;
+          status.textContent = `Claude is processing ${i + 1}–${Math.min(i + CHUNK, pairs.length)} of ${pairs.length}…`;
           const res = await enrichMany(slice);
           enriched.push(...(res.words || []));
         }
@@ -1244,7 +1323,7 @@ function wire() {
         });
       }
 
-      status.textContent = 'Збереження…';
+      status.textContent = 'Saving…';
       const existing = new Set((await store.allWords()).map((w) => w.termKey));
       const fresh = [];
       let skipped = 0;
@@ -1258,7 +1337,7 @@ function wire() {
 
       status.textContent = '';
       $('#bulkInput').value = '';
-      toast(`Додано ${fresh.length}${skipped ? `, пропущено дублікатів: ${skipped}` : ''}`);
+      toast(`Added ${fresh.length}${skipped ? `, ${skipped} duplicates skipped` : ''}`);
       await refreshDueBadge();
     } catch (err) {
       status.classList.add('err');
@@ -1283,12 +1362,27 @@ function wire() {
   $('#btnSaveStudy').addEventListener('click', async () => {
     settings.sessionMax = Math.max(5, Number($('#sSessionMax').value) || DEFAULTS.sessionMax);
     settings.newPerDay = Math.max(0, Number($('#sNewPerDay').value) || 0);
-    settings.sound = $('#sSound').checked;
+    await saveSettings();
+    flash('#studySaved');
+  });
+
+  // voice options live on their own and take effect at once
+  $('#sAutoSpeak').addEventListener('change', async () => {
     settings.autoSpeak = $('#sAutoSpeak').checked;
+    await saveSettings();
+  });
+
+  $('#sVoice').addEventListener('change', async () => {
     settings.voiceURI = $('#sVoice').value;
     await saveSettings();
-    applySoundState();
-    flash('#studySaved');
+    const v = currentVoice();
+    speak('This is how your words will sound.');
+    toast(v ? `Voice: ${v.name}` : 'Default system voice');
+  });
+
+  $('#btnTestVoice').addEventListener('click', () => {
+    if (!settings.sound) return toast('Turn sound on first', true);
+    speak('Hello! This is how your words will sound.');
   });
 
   // the master switch takes effect immediately, without pressing Save
@@ -1296,7 +1390,8 @@ function wire() {
     settings.sound = $('#sSound').checked;
     await saveSettings();
     applySoundState();
-    toast(settings.sound ? 'Звук увімкнено' : 'Звук вимкнено');
+    toast(settings.sound ? 'Sound on' : 'Sound off');
+    if (settings.sound) speak('Sound is on.');
   });
 
   $('#btnExport').addEventListener('click', exportJson);
@@ -1307,11 +1402,11 @@ function wire() {
     e.target.value = '';
   });
   $('#btnWipe').addEventListener('click', async () => {
-    if (!confirm('Видалити всі слова, прогрес і налаштування? Це не можна скасувати.')) return;
+    if (!confirm('Delete all words, progress and settings? This cannot be undone.')) return;
     await store.clearAll();
     settings = { ...DEFAULTS };
     session.queue = []; session.current = null;
-    toast('Усі дані видалено');
+    toast('All data deleted');
     renderStreak(0);
     nav('review');
   });
@@ -1331,9 +1426,9 @@ function checkTyped() {
 
   $('#typeInput').disabled = true;
   const fb = $('#typeFeedback');
-  if (exact) fb.innerHTML = '<span class="ok">Правильно</span>';
-  else if (close) fb.innerHTML = `<span class="ok">Майже</span><span class="expected">${escapeHtml(w.term)}</span>`;
-  else fb.innerHTML = `<span class="bad">Не те</span><span class="expected">${escapeHtml(w.term)}</span>`;
+  if (exact) fb.innerHTML = '<span class="ok">Correct</span>';
+  else if (close) fb.innerHTML = `<span class="ok">Almost</span><span class="expected">${escapeHtml(w.term)}</span>`;
+  else fb.innerHTML = `<span class="bad">Not quite</span><span class="expected">${escapeHtml(w.term)}</span>`;
 
   revealAnswer();
   if (settings.autoSpeak) speak(w.term);
@@ -1366,8 +1461,8 @@ function levenshtein(a, b) {
     db = await openDB();
   } catch (e) {
     document.body.innerHTML =
-      '<p style="padding:24px">Не вдалося відкрити локальну базу даних. ' +
-      'Приватний режим браузера блокує IndexedDB — відкрий сторінку у звичайному вікні.</p>';
+      '<p style="padding:24px">Could not open the local database. ' +
+      'Private browsing blocks IndexedDB — open this page in a normal window.</p>';
     return;
   }
   await loadSettings();

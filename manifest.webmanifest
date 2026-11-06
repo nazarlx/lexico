@@ -1,16 +1,26 @@
 {
-  "name": "Lexico — словниковий запас",
+  "name": "Lexico — vocabulary trainer",
   "short_name": "Lexico",
-  "description": "Тренажер англійських слів з інтервальним повторенням. Працює офлайн.",
+  "description": "English vocabulary trainer with spaced repetition. Works offline.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f6f7fb",
   "theme_color": "#ffffff",
-  "lang": "uk",
+  "lang": "en",
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
   ]
 }

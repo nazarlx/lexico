@@ -524,6 +524,8 @@ input:focus, select:focus, textarea:focus {
 .lvl-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #6f7dff); }
 .lvl-num { text-align: right; color: var(--fg-dim); font-variant-numeric: tabular-nums; font-weight: 700; }
 
+.voice-note { font-size: 12.5px; font-weight: 600; color: var(--hard); max-width: 34ch; }
+
 /* ===================== sound off ===================== */
 body.no-sound #btnSpeak,
 body.no-sound [data-speak] { display: none !important; }

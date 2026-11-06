@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1320" media="(prefers-color-scheme: dark)">
-<title>Lexico — словниковий запас</title>
+<title>Lexico — vocabulary trainer</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -15,21 +15,21 @@
 
 <header class="topbar">
   <div class="brand">Lexico</div>
-  <div class="streak" id="streakBadge" title="Серія днів">🔥 <span id="streakVal">0</span></div>
+  <div class="streak" id="streakBadge" title="Day streak">🔥 <span id="streakVal">0</span></div>
 </header>
 
 <main id="main">
 
-  <!-- ============ REVIEW ============ -->
+  <!-- ============ TODAY ============ -->
   <section class="view" id="view-review">
     <div id="reviewEmpty" class="empty hidden">
       <div class="empty-icon" id="emptyIcon">✅</div>
-      <h2 id="emptyTitle">На сьогодні все</h2>
-      <p id="emptyHint">Повторень немає. Додай нові слова або повертайся завтра.</p>
+      <h2 id="emptyTitle">All done for today</h2>
+      <p id="emptyHint">Nothing is due. Add new words or come back tomorrow.</p>
       <div class="empty-actions">
-        <button class="btn primary hidden" id="btnQuickSeed">Завантажити 1000 слів</button>
-        <button class="btn primary hidden" id="btnEmptyAdd" data-nav="add">Додати слова</button>
-        <button class="btn ghost hidden" id="btnStudyAhead">Повторити наперед</button>
+        <button class="btn primary hidden" id="btnQuickSeed">Load 1000 words</button>
+        <button class="btn primary hidden" id="btnEmptyAdd" data-nav="add">Add your own words</button>
+        <button class="btn ghost hidden" id="btnStudyAhead">Study ahead</button>
       </div>
       <p class="hint" id="quickSeedNote" style="margin-top:18px"></p>
     </div>
@@ -40,7 +40,7 @@
         <div class="plan-head">
           <div>
             <div class="plan-day" id="planDay"></div>
-            <h2 class="plan-title" id="planTitle">План на сьогодні</h2>
+            <h2 class="plan-title" id="planTitle">Today's plan</h2>
           </div>
           <div class="plan-ring" id="planRing"><span id="planPct">0%</span></div>
         </div>
@@ -48,7 +48,7 @@
         <div class="plan-rows" id="planRows"></div>
 
         <div class="goal-picker" id="goalPicker">
-          <span class="goal-lbl">Норма на день</span>
+          <span class="goal-lbl">Words per day</span>
           <div class="goal-opts">
             <button class="goal-opt" data-goal="10">10</button>
             <button class="goal-opt" data-goal="20">20</button>
@@ -57,12 +57,12 @@
           </div>
         </div>
 
-        <button class="btn primary wide" id="btnStartToday">Почати</button>
+        <button class="btn primary wide" id="btnStartToday">Start</button>
         <p class="hint plan-note" id="planNote"></p>
       </div>
 
       <div class="plan-card hidden" id="weekCard">
-        <h3 class="plan-subtitle">Цього тижня</h3>
+        <h3 class="plan-subtitle">This week</h3>
         <div class="week-grid" id="weekGrid"></div>
         <div class="week-summary" id="weekSummary"></div>
       </div>
@@ -83,18 +83,18 @@
           <div class="face front">
             <div class="card-top">
               <span class="chip" id="cardPos"></span>
-              <button class="icon-btn" id="btnSpeak" title="Озвучити" aria-label="Озвучити слово">🔊</button>
+              <button class="icon-btn" id="btnSpeak" title="Play pronunciation" aria-label="Play pronunciation">🔊</button>
             </div>
             <div class="face-body">
               <div class="card-prompt" id="cardPrompt"></div>
               <div class="card-ipa" id="cardIpa"></div>
             </div>
-            <div class="flip-hint" id="flipHint">Натисни, щоб побачити переклад</div>
+            <div class="flip-hint" id="flipHint">Tap to see the translation</div>
           </div>
 
           <!-- back: the answer -->
           <div class="face back" id="cardAnswer">
-            <div class="card-top"><span class="chip">переклад</span></div>
+            <div class="card-top"><span class="chip">translation</span></div>
             <div class="face-body">
               <div class="answer-main" id="answerMain"></div>
               <div class="answer-example" id="answerExample"></div>
@@ -110,39 +110,39 @@
       <!-- typing -->
       <div class="typing hidden" id="typing">
         <input type="text" id="typeInput" autocomplete="off" autocapitalize="off"
-               spellcheck="false" placeholder="Введи слово англійською"
-               aria-label="Введи слово англійською">
+               spellcheck="false" placeholder="Type the English word"
+               aria-label="Type the English word">
         <div class="type-feedback" id="typeFeedback"></div>
       </div>
 
       <div class="card-actions">
-        <button class="btn primary wide hidden" id="btnShow">Показати відповідь</button>
-        <button class="btn primary wide hidden" id="btnCheck">Перевірити</button>
-        <button class="btn primary wide hidden" id="btnNext">Далі</button>
+        <button class="btn primary wide hidden" id="btnShow">Show answer</button>
+        <button class="btn primary wide hidden" id="btnCheck">Check</button>
+        <button class="btn primary wide hidden" id="btnNext">Next</button>
 
         <div class="grades hidden" id="grades">
-          <button class="btn grade again" data-grade="0"><b>Не знаю</b><small>покажу знову</small></button>
-          <button class="btn grade good"  data-grade="1"><b>Знаю</b><small id="gGood">–</small></button>
+          <button class="btn grade again" data-grade="0"><b>Don't know</b><small>show again</small></button>
+          <button class="btn grade good"  data-grade="1"><b>I know it</b><small id="gGood">–</small></button>
         </div>
       </div>
     </div>
 
     <div id="sessionDone" class="empty hidden">
       <div class="empty-icon" id="doneIcon">🎉</div>
-      <h2 id="doneTitle">Сесію завершено</h2>
+      <h2 id="doneTitle">Session complete</h2>
       <div class="done-stats">
-        <div class="done-stat"><b id="doneTotal">0</b><span id="doneTotalLbl">карток</span></div>
-        <div class="done-stat"><b id="doneAcc">0%</b><span>запам'ятав</span></div>
-        <div class="done-stat"><b id="doneStreak">0</b><span>днів поспіль</span></div>
+        <div class="done-stat"><b id="doneTotal">0</b><span id="doneTotalLbl">cards</span></div>
+        <div class="done-stat"><b id="doneAcc">0%</b><span>recalled</span></div>
+        <div class="done-stat"><b id="doneStreak">0</b><span>day streak</span></div>
       </div>
       <p id="doneStats"></p>
       <div class="forgot hidden" id="forgotBox">
-        <div class="forgot-title">Треба підтягнути</div>
+        <div class="forgot-title">Needs more work</div>
         <div class="forgot-list" id="forgotList"></div>
       </div>
       <div class="empty-actions">
-        <button class="btn primary" id="btnDoneOk">Добре</button>
-        <button class="btn ghost" id="btnDoneMore">Ще повторення</button>
+        <button class="btn primary" id="btnDoneOk">Done</button>
+        <button class="btn ghost" id="btnDoneMore">More practice</button>
       </div>
     </div>
   </section>
@@ -150,13 +150,13 @@
   <!-- ============ WORDS ============ -->
   <section class="view hidden" id="view-words">
     <div class="toolbar">
-      <input type="search" id="wordSearch" placeholder="Пошук слова" aria-label="Пошук слова">
-      <select id="wordFilter" aria-label="Фільтр слів">
-        <option value="all">Усі</option>
-        <option value="due">До повторення</option>
-        <option value="new">Нові</option>
-        <option value="learning">Вивчаються</option>
-        <option value="mature">Вивчені</option>
+      <input type="search" id="wordSearch" placeholder="Search a word" aria-label="Search a word">
+      <select id="wordFilter" aria-label="Filter words">
+        <option value="all">All</option>
+        <option value="due">Due</option>
+        <option value="new">New</option>
+        <option value="learning">Learning</option>
+        <option value="mature">Known</option>
       </select>
     </div>
     <div class="list-head" id="wordCount"></div>
@@ -166,42 +166,42 @@
   <!-- ============ ADD ============ -->
   <section class="view hidden" id="view-add">
     <div class="tabs">
-      <button class="tab active" data-addtab="one">Одне слово</button>
-      <button class="tab" data-addtab="bulk">Імпорт</button>
-      <button class="tab" data-addtab="seed">Готовий набір</button>
+      <button class="tab active" data-addtab="one">Single word</button>
+      <button class="tab" data-addtab="bulk">Import</button>
+      <button class="tab" data-addtab="seed">Starter pack</button>
     </div>
 
     <form class="panel" id="addOneForm" data-addpane="one">
-      <label>Слово (англійською)
+      <label>Word (in English)
         <div class="row">
           <input type="text" id="fTerm" required autocomplete="off" spellcheck="false" placeholder="resilient">
-          <button type="button" class="btn ghost" id="btnAutofill" title="Заповнити через Claude">✨ AI</button>
+          <button type="button" class="btn ghost" id="btnAutofill" title="Fill in with Claude">✨ AI</button>
         </div>
       </label>
       <div id="aiStatus" class="ai-status"></div>
 
-      <label>Переклад
+      <label>Translation
         <input type="text" id="fTranslation" required autocomplete="off" placeholder="стійкий, витривалий">
       </label>
       <div class="grid2">
-        <label>Транскрипція
+        <label>Pronunciation
           <input type="text" id="fIpa" autocomplete="off" placeholder="/rɪˈzɪliənt/">
         </label>
-        <label>Частина мови
+        <label>Part of speech
           <input type="text" id="fPos" autocomplete="off" placeholder="adjective">
         </label>
       </div>
-      <label>Приклад речення
+      <label>Example sentence
         <input type="text" id="fExample" autocomplete="off" placeholder="She stayed resilient under pressure.">
       </label>
-      <label>Переклад прикладу
+      <label>Example translation
         <input type="text" id="fExampleTr" autocomplete="off" placeholder="Вона залишалася стійкою під тиском.">
       </label>
       <div class="grid2">
-        <label>Теми (через кому)
-          <input type="text" id="fTags" autocomplete="off" placeholder="характер, робота">
+        <label>Topics (comma separated)
+          <input type="text" id="fTags" autocomplete="off" placeholder="character, work">
         </label>
-        <label>Рівень
+        <label>Level
           <select id="fLevel">
             <option value="">—</option>
             <option>A1</option><option>A2</option><option>B1</option>
@@ -209,58 +209,57 @@
           </select>
         </label>
       </div>
-      <button class="btn primary wide" type="submit">Додати слово</button>
+      <button class="btn primary wide" type="submit">Add word</button>
     </form>
 
     <div class="panel hidden" data-addpane="bulk">
-      <p class="hint">Один рядок — одне слово. Формат: <code>word — переклад</code>
-         (роздільник <code>—</code>, <code>-</code>, <code>=</code> або таб).</p>
+      <p class="hint">One word per line. Format: <code>word — translation</code>
+         (separator <code>—</code>, <code>-</code>, <code>=</code> or a tab).</p>
       <textarea id="bulkInput" rows="10" spellcheck="false"
         placeholder="resilient — стійкий&#10;blunt — прямолінійний&#10;thrive — процвітати"></textarea>
       <label class="checkbox">
-        <input type="checkbox" id="bulkAi"> Доповнити приклади й транскрипцію через Claude
+        <input type="checkbox" id="bulkAi"> Fill in examples and pronunciation with Claude
       </label>
       <div id="bulkStatus" class="ai-status"></div>
-      <button class="btn primary wide" id="btnBulkImport">Імпортувати</button>
+      <button class="btn primary wide" id="btnBulkImport">Import</button>
     </div>
 
     <div class="panel hidden" data-addpane="seed">
-      <h3>Готовий набір — 5646 слів</h3>
+      <h3>Starter pack — 5646 words</h3>
       <p class="hint">
-        Порядок слів узято з частотності англійських субтитрів, тобто з живої
-        розмовної мови, а переклади й транскрипція — з англійської Wiktionary.
-        Слова вводяться строго за частотністю: спершу вчиш те, що зустрічається
-        найчастіше. Твої власні слова завжди йдуть перед набором.
+        Word order comes from the frequency of English subtitles, so it reflects
+        real spoken language. Translations and pronunciation come from the English
+        Wiktionary. Words are introduced strictly by frequency, so you learn the
+        most common ones first. Your own words always come before the pack.
       </p>
       <p class="hint">
-        Переклад дається для основного значення слова, тому для багатозначних слів
-        він може не збігтися з тим, яке потрібне тобі — картку завжди можна
-        виправити вручну. Рівні A1–C2 виведені з частотності, а не з офіційних
-        списків CEFR.
+        Each card shows the translation of the word's primary sense, so for words
+        with several meanings it may not be the one you need — you can always edit
+        a card. Levels A1–C2 are derived from frequency, not from official CEFR lists.
       </p>
       <div class="grid2">
-        <label>Скільки слів додати
+        <label>How many words
           <select id="seedCount">
-            <option value="300">300 — найнеобхідніше</option>
+            <option value="300">300 — the essentials</option>
             <option value="1000" selected>1000</option>
             <option value="2500">2500</option>
-            <option value="0">усі 5646</option>
+            <option value="0">all 5646</option>
           </select>
         </label>
-        <label>Рівні
+        <label>Levels
           <select id="seedLevel">
-            <option value="all">Усі рівні</option>
-            <option value="A1,A2">Лише A1–A2</option>
+            <option value="all">All levels</option>
+            <option value="A1,A2">A1–A2 only</option>
             <option value="A1,A2,B1">A1–B1</option>
-            <option value="B1,B2,C1,C2">B1 і вище</option>
+            <option value="B1,B2,C1,C2">B1 and above</option>
           </select>
         </label>
       </div>
       <div id="seedStatus" class="ai-status"></div>
-      <button class="btn primary wide" id="btnSeedLoad">Завантажити набір</button>
+      <button class="btn primary wide" id="btnSeedLoad">Load the pack</button>
       <p class="hint" style="margin:14px 0 0">
-        Дані: англійська Wiktionary (CC BY-SA 3.0) та частотний список
-        OpenSubtitles (hermitdave/FrequencyWords).
+        Data: English Wiktionary (CC BY-SA 3.0) and the OpenSubtitles frequency
+        list (hermitdave/FrequencyWords).
       </p>
     </div>
   </section>
@@ -268,79 +267,87 @@
   <!-- ============ STATS ============ -->
   <section class="view hidden" id="view-stats">
     <div class="stat-grid">
-      <div class="stat"><div class="stat-val" id="stTotal">0</div><div class="stat-lbl">Усього слів</div></div>
-      <div class="stat"><div class="stat-val" id="stDue">0</div><div class="stat-lbl">До повторення</div></div>
-      <div class="stat"><div class="stat-val" id="stNew">0</div><div class="stat-lbl">Нові</div></div>
-      <div class="stat"><div class="stat-val" id="stMature">0</div><div class="stat-lbl">Вивчені</div></div>
-      <div class="stat"><div class="stat-val" id="stStreak">0</div><div class="stat-lbl">Серія днів</div></div>
-      <div class="stat"><div class="stat-val" id="stAccuracy">—</div><div class="stat-lbl">Точність</div></div>
+      <div class="stat"><div class="stat-val" id="stTotal">0</div><div class="stat-lbl">Words total</div></div>
+      <div class="stat"><div class="stat-val" id="stDue">0</div><div class="stat-lbl">Due now</div></div>
+      <div class="stat"><div class="stat-val" id="stNew">0</div><div class="stat-lbl">New</div></div>
+      <div class="stat"><div class="stat-val" id="stMature">0</div><div class="stat-lbl">Known</div></div>
+      <div class="stat"><div class="stat-val" id="stStreak">0</div><div class="stat-lbl">Day streak</div></div>
+      <div class="stat"><div class="stat-val" id="stAccuracy">—</div><div class="stat-lbl">Accuracy</div></div>
     </div>
 
-    <h3 class="section-title">Навантаження на 14 днів</h3>
+    <h3 class="section-title">Next 14 days</h3>
     <div class="forecast" id="forecast"></div>
 
-    <h3 class="section-title">Розподіл за рівнями</h3>
+    <h3 class="section-title">By level</h3>
     <div class="levels" id="levels"></div>
   </section>
 
   <!-- ============ SETTINGS ============ -->
   <section class="view hidden" id="view-settings">
     <div class="panel">
-      <h3>Claude API</h3>
-      <p class="hint">Ключ зберігається лише в цьому браузері (IndexedDB) і надсилається
-         напряму в <code>api.anthropic.com</code>. Без ключа додаток працює повністю —
-         просто без AI-автозаповнення.</p>
-      <label>API-ключ
-        <input type="password" id="sApiKey" autocomplete="off" placeholder="sk-ant-...">
-      </label>
-      <div class="grid2">
-        <label>Модель
-          <input type="text" id="sModel" autocomplete="off">
-        </label>
-        <label>Мова перекладу
-          <input type="text" id="sLang" autocomplete="off">
-        </label>
-      </div>
-      <button class="btn primary" id="btnSaveSettings">Зберегти</button>
-      <span id="settingsSaved" class="saved-badge hidden">Збережено</span>
-    </div>
-
-    <div class="panel">
-      <h3>Сесія повторення</h3>
-      <div class="grid2">
-        <label>Максимум повторень за сесію
-          <input type="number" id="sSessionMax" min="5" max="200" step="5">
-        </label>
-        <label>Нових слів на день (пн–сб)
-          <input type="number" id="sNewPerDay" min="0" max="100" step="1">
-        </label>
-      </div>
+      <h3>Pronunciation</h3>
       <label class="checkbox" style="margin-bottom:12px">
-        <input type="checkbox" id="sSound"> <b>Звук і озвучка слів</b>
+        <input type="checkbox" id="sSound"> <b>Sound and pronunciation</b>
       </label>
       <p class="hint">
-        Вимкнено за замовчуванням: системні голоси сильно різняться за якістю.
-        Перемикач діє відразу, без кнопки «Зберегти».
+        Lexico picks the best female English voice your device offers. Voice quality
+        depends on the system — iPhone and Mac sound best. The switch applies instantly.
       </p>
       <div class="sound-opts">
         <label class="checkbox">
           <input type="checkbox" id="sAutoSpeak" class="sound-dependent">
-          Озвучувати слово автоматично при показі картки
+          Play the word automatically when a card appears
         </label>
-        <label>Голос озвучки
+        <label>Voice
           <select id="sVoice" class="sound-dependent"></select>
         </label>
+        <div class="row wrap">
+          <button class="btn ghost sound-dependent" id="btnTestVoice" type="button">▶︎ Test voice</button>
+          <span class="voice-note" id="voiceNote"></span>
+        </div>
       </div>
-      <button class="btn primary" id="btnSaveStudy">Зберегти</button>
-      <span id="studySaved" class="saved-badge hidden">Збережено</span>
     </div>
 
     <div class="panel">
-      <h3>Дані</h3>
+      <h3>Study</h3>
+      <div class="grid2">
+        <label>Max reviews per session
+          <input type="number" id="sSessionMax" min="5" max="200" step="5">
+        </label>
+        <label>New words per day (Mon–Sat)
+          <input type="number" id="sNewPerDay" min="0" max="100" step="1">
+        </label>
+      </div>
+      <button class="btn primary" id="btnSaveStudy">Save</button>
+      <span id="studySaved" class="saved-badge hidden">Saved</span>
+    </div>
+
+    <div class="panel">
+      <h3>Claude API</h3>
+      <p class="hint">The key is stored only in this browser (IndexedDB) and is sent
+         straight to <code>api.anthropic.com</code>. Without a key everything works —
+         just without AI autofill.</p>
+      <label>API key
+        <input type="password" id="sApiKey" autocomplete="off" placeholder="sk-ant-...">
+      </label>
+      <div class="grid2">
+        <label>Model
+          <input type="text" id="sModel" autocomplete="off">
+        </label>
+        <label>Translation language
+          <input type="text" id="sLang" autocomplete="off">
+        </label>
+      </div>
+      <button class="btn primary" id="btnSaveSettings">Save</button>
+      <span id="settingsSaved" class="saved-badge hidden">Saved</span>
+    </div>
+
+    <div class="panel">
+      <h3>Data</h3>
       <div class="row wrap">
-        <button class="btn ghost" id="btnExport">Експорт JSON</button>
-        <button class="btn ghost" id="btnImport">Імпорт JSON</button>
-        <button class="btn danger" id="btnWipe">Видалити все</button>
+        <button class="btn ghost" id="btnExport">Export JSON</button>
+        <button class="btn ghost" id="btnImport">Import JSON</button>
+        <button class="btn danger" id="btnWipe">Delete everything</button>
       </div>
       <input type="file" id="importFile" accept="application/json" class="hidden">
     </div>
@@ -349,11 +356,11 @@
 </main>
 
 <nav class="tabbar">
-  <button class="tabbtn active" data-nav="review"><span>🎯</span>Сьогодні<i class="badge hidden" id="navDue"></i></button>
-  <button class="tabbtn" data-nav="words"><span>📚</span>Слова</button>
-  <button class="tabbtn" data-nav="add"><span>➕</span>Додати</button>
-  <button class="tabbtn" data-nav="stats"><span>📊</span>Статистика</button>
-  <button class="tabbtn" data-nav="settings"><span>⚙️</span>Налаштування</button>
+  <button class="tabbtn active" data-nav="review"><span>🎯</span>Today<i class="badge hidden" id="navDue"></i></button>
+  <button class="tabbtn" data-nav="words"><span>📚</span>Words</button>
+  <button class="tabbtn" data-nav="add"><span>➕</span>Add</button>
+  <button class="tabbtn" data-nav="stats"><span>📊</span>Stats</button>
+  <button class="tabbtn" data-nav="settings"><span>⚙️</span>Settings</button>
 </nav>
 
 <div id="toast" class="toast hidden"></div>
