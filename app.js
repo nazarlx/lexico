@@ -103,6 +103,33 @@ function saveSettings() {
   return store.setMeta('settings', settings);
 }
 
+/* A broken build once shipped a generated seed.json full of placeholders —
+   entries like {term:"a", translation:"переклад a"}. Those were imported into
+   real devices, so fixing the file was not enough; they have to be removed
+   from local storage too. Matching is deliberately narrow: a one/two letter
+   stem with optional digits, whose translation is literally "переклад <term>". */
+const PLACEHOLDER_TERM = /^[a-z]{1,2}\d*$/;
+
+function isPlaceholder(w) {
+  return PLACEHOLDER_TERM.test(w.term || '') &&
+         (w.translation || '').trim().toLowerCase() === 'переклад ' + (w.term || '').toLowerCase();
+}
+
+async function purgePlaceholders() {
+  const all = await store.allWords();
+  const junk = all.filter(isPlaceholder);
+  if (!junk.length) return 0;
+
+  await new Promise((resolve, reject) => {
+    const t = db.transaction('words', 'readwrite');
+    const s = t.objectStore('words');
+    junk.forEach((w) => s.delete(w.id));
+    t.oncomplete = resolve;
+    t.onerror = () => reject(t.error);
+  });
+  return junk.length;
+}
+
 /* ======================= SM-2 ======================= */
 
 const DAY = 86400000;
@@ -1571,12 +1598,19 @@ function levenshtein(a, b) {
     return;
   }
   await loadSettings();
+
+  const removed = await purgePlaceholders();
+
   wire();
   loadVoices();
   applySoundState();
   await renderStreakFromStore();
   await refreshDueBadge();
   nav('review');
+
+  if (removed) {
+    toast(`Removed ${removed} broken placeholder ${plural(removed, 'entry', 'entries')}`);
+  }
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline cache is optional */ });
