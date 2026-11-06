@@ -1,7 +1,16 @@
-/* Offline shell cache. Bump CACHE on every release so clients pick up new assets. */
+/* Offline cache.
+ *
+ * The app shell is network-first on purpose. A cache-first shell meant every
+ * fix shipped had to wait for a second reload — the old worker kept serving the
+ * old app.js — so broken data stayed on screen even after it was fixed on the
+ * server. Now a fresh app.js wins whenever the network answers, and the cache
+ * is only the offline fallback. Data files stay cache-first: they are large,
+ * change rarely, and are revalidated in the background.
+ */
 
-const CACHE = 'lexico-v12';
-const ASSETS = [
+const CACHE = 'lexico-v13';
+
+const SHELL = [
   './',
   './index.html',
   './app.css',
@@ -9,11 +18,12 @@ const ASSETS = [
   './icon.svg',
   './manifest.webmanifest',
 ];
-/* seed.json is ~1 MB — cached lazily on first use rather than at install,
-   so a fresh install stays fast for users who never load the starter pack. */
+
+/* Large, rarely-changing payloads: serve fast from cache, refresh behind the scenes. */
+const DATA = /\/(seed|phrases)\.json$/;
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -26,19 +36,37 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // Never cache API traffic, and never intercept cross-origin requests.
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
 
-  // Cache-first for the app shell, with a background refresh.
-  e.respondWith(
-    caches.match(e.request).then((hit) => {
-      const fetching = fetch(e.request)
-        .then((res) => {
-          if (res.ok) caches.open(CACHE).then((c) => c.put(e.request, res.clone()));
-          return res;
-        })
-        .catch(() => hit);
-      return hit || fetching;
-    })
-  );
+  if (DATA.test(url.pathname)) {
+    e.respondWith(staleWhileRevalidate(e.request));
+  } else {
+    e.respondWith(networkFirst(e.request));
+  }
 });
+
+async function networkFirst(request) {
+  try {
+    const res = await fetch(request);
+    if (res && res.ok) {
+      const copy = res.clone();
+      caches.open(CACHE).then((c) => c.put(request, copy));
+    }
+    return res;
+  } catch {
+    const hit = await caches.match(request);
+    // navigations must still resolve offline, even for a deep link
+    return hit || (await caches.match('./index.html')) || Response.error();
+  }
+}
+
+async function staleWhileRevalidate(request) {
+  const hit = await caches.match(request);
+  const fetching = fetch(request)
+    .then((res) => {
+      if (res && res.ok) caches.open(CACHE).then((c) => c.put(request, res.clone()));
+      return res;
+    })
+    .catch(() => hit);
+  return hit || fetching;
+}

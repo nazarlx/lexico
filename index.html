@@ -260,20 +260,29 @@
       <button class="btn primary wide" id="btnSeedLoad">Load the pack</button>
       <p class="hint" style="margin:14px 0 0">
         Data: English Wiktionary (CC BY-SA 3.0) and the OpenSubtitles frequency
-        list (hermitdave/FrequencyWords).
+        list (hermitdave/FrequencyWords). Phrases: Tatoeba (CC BY 2.0 FR).
       </p>
     </div>
 
     <div class="panel hidden" data-addpane="phrases">
-      <h3>Everyday phrases — 160</h3>
+      <h3>Everyday phrases — 3154</h3>
       <p class="hint">
-        Whole expressions people actually say, not isolated words:
-        <i>I'm on my way</i>, <i>Never mind</i>, <i>Could you give me a hand?</i>
-        Each card carries the phrase, its Ukrainian meaning and a sentence showing
-        when to use it. These are written by hand, not generated.
+        Whole sentences people actually say, not isolated words:
+        <i>I'm on my way</i>, <i>Never mind</i>, <i>Are you in a hurry?</i>
+        160 of them are hand-written with a usage example; the rest are
+        human-translated sentence pairs from the Tatoeba corpus, filtered down
+        to short everyday speech built from words you already study.
       </p>
       <label>Topics
         <div class="topic-picker" id="topicPicker"></div>
+      </label>
+      <label>How many
+        <select id="phraseCount">
+          <option value="200">200 — the most useful</option>
+          <option value="500" selected>500</option>
+          <option value="1000">1000</option>
+          <option value="0">all of them</option>
+        </select>
       </label>
       <div id="phraseStatus" class="ai-status"></div>
       <button class="btn primary wide" id="btnPhrasesLoad">Add selected phrases</button>

@@ -1173,10 +1173,13 @@ async function loadPhrasePack() {
   btn.disabled = true;
   try {
     const all = await fetchPhrases();
-    const picked = selectedTopics.size
+    let picked = selectedTopics.size
       ? all.filter((p) => selectedTopics.has(p.topic))
       : all;
     if (!picked.length) throw new Error('Pick at least one topic.');
+    // the file is ordered by usefulness, so slicing keeps the best ones
+    const limit = Number($('#phraseCount').value) || Infinity;
+    picked = picked.slice(0, limit);
 
     status.textContent = 'Checking for duplicates…';
     const existing = new Set((await store.allWords()).map((w) => w.termKey));
